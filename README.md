@@ -1,4 +1,11 @@
-JDBC Foreign Data Wrapper for PostgreSQL
+> [!CAUTION]
+> **DISCLAIMER: THIS FORK IS SPECIFICALLY MODIFIED FOR USE WITH PROGRESS DATADIRECT (DDTEK) DRIVERS!**  
+> **A LICENSED JDBC DRIVER IS REQUIRED FOR THIS SOFTWARE TO FUNCTION.**
+>
+> This project does not include any Progress DataDirect (DDTEK) binary files or drivers.  
+> You must obtain the licensed driver files directly from [Progress Software](https://www.progress.com/datadirect-connectors).
+
+JDBC Foreign Data Wrapper for PostgreSQL (DDTEK FORK)
 ============================================
 
 This is a foreign data wrapper (FDW) to connect [PostgreSQL](https://www.postgresql.org/)
@@ -6,7 +13,7 @@ to any Java DataBase Connectivity (JDBC) data source.
 
 This `jdbc_fdw` is based on [JDBC\_FDW](http://github.com/atris/JDBC_FDW.git) and [jdbc2\_fdw](https://github.com/heimir-sverrisson/jdbc2_fdw).
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg" align="center" height="100" alt="PostgreSQL"/>	+	<img src="https://1000logos.net/wp-content/uploads/2020/09/Java-Logo-500x313.png" align="center" height="100" alt="JDBC"/>
+<img src="https://upload.wikimedia.org/wikipedia/commons/2/29/Postgresql_elephant.svg" align="center" height="100" alt="PostgreSQL"/>	+	<img src="https://1000logos.net/wp-content/uploads/2020/09/Java-Logo-500x313.png" align="center" height="100" alt="JDBC"/>  + <img src="https://upload.wikimedia.org/wikipedia/commons/d/d5/Progress_Software_logo.svg" align="center" height="100" alt="Progress Software"/>
 
 
 Contents
