@@ -140,7 +140,8 @@ jdbc_fdw_validator(PG_FUNCTION_ARGS)
 		 * Validate option value, when we can do so without any context.
 		 */
 		if (strcmp(def->defname, "use_remote_estimate") == 0 ||
-			strcmp(def->defname, "updatable") == 0)
+			strcmp(def->defname, "updatable") == 0 ||
+			strcmp(def->defname, "progress") == 0)
 		{
 			/* these accept only boolean values */
 			(void) defGetBoolean(def);
@@ -210,6 +211,7 @@ init_jdbcfdw_options(void)
 		{"key", AttributeRelationId, false},
 		{"column_name", AttributeRelationId, false},
 		{"use_remote_estimate", ForeignTableRelationId, false},
+		{"progress", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 

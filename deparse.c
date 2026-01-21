@@ -106,6 +106,7 @@ typedef struct deparse_expr_cxt
 	List	  **params_list;	/* exprs that will become remote Params */
 	jdbcAggref *aggref;
 	char	   *q_char;			/* Default identifier quote char */
+	bool	    progress;
 } deparse_expr_cxt;
 
 /*
@@ -132,7 +133,7 @@ static void jdbc_deparse_column_ref(StringInfo buf, int varno, int varattno,
 									PlannerInfo *root, bool qualify_col, char *q_char);
 static void jdbc_deparse_aggref(Aggref *node, deparse_expr_cxt *context);
 static void jdbc_deparse_relation(StringInfo buf, Relation rel, char *q_char);
-static void jdbc_deparse_string_literal(StringInfo buf, const char *val);
+static void jdbc_deparse_string_literal(StringInfo buf, const char *val, deparse_expr_cxt *context);
 static void jdbc_deparse_expr(Expr *expr, deparse_expr_cxt *context);
 static void jdbc_deparse_var(Var *node, deparse_expr_cxt *context);
 static void jdbc_deparse_const(Const *node, deparse_expr_cxt *context);
@@ -926,6 +927,7 @@ jdbc_deparse_select_stmt_for_rel(StringInfo buf,
 	context.foreignrel = baserel;
 	context.params_list = params_list;
 	context.scanrel = IS_UPPER_REL(baserel) ? fpinfo->outerrel : baserel;
+	context.progress = fpinfo->progress;
 
 
 	jdbc_deparse_select_sql(buf, root, baserel, remote_conds,
@@ -1033,6 +1035,7 @@ jdbc_deparse_select_sql(StringInfo buf,
 	context.params_list = params_list;
 	context.scanrel = IS_UPPER_REL(baserel) ? fpinfo->outerrel : baserel;
 	context.q_char = q_char;
+	context.progress = fpinfo->progress;
 
 	rte = planner_rt_fetch(context.scanrel->relid, root);
 
@@ -1170,6 +1173,7 @@ jdbc_append_where_clause(StringInfo buf,
 	context.params_list = params;
 	context.scanrel = IS_UPPER_REL(baserel) ? fpinfo->outerrel : baserel;
 	context.q_char = q_char;
+	context.progress = fpinfo->progress;
 
 	/* Make sure any constants in the exprs are printed portably */
 	nestlevel = jdbc_set_transmission_modes();
@@ -1605,7 +1609,7 @@ jdbc_deparse_relation(StringInfo buf, Relation rel, char *q_char)
  * Append a SQL string literal representing "val" to buf.
  */
 static void
-jdbc_deparse_string_literal(StringInfo buf, const char *val)
+jdbc_deparse_string_literal(StringInfo buf, const char *val, deparse_expr_cxt *context)
 {
 	const char *valptr;
 
@@ -1792,7 +1796,7 @@ jdbc_deparse_const(Const *node, deparse_expr_cxt *context)
 				appendStringInfoString(buf, "false");
 			break;
 		default:
-			jdbc_deparse_string_literal(buf, extval);
+			jdbc_deparse_string_literal(buf, extval, context);
 			break;
 	}
 

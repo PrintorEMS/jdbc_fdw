@@ -112,6 +112,8 @@ typedef struct jdbcFdwRelationInfo
 
 	/* Function pushdown surppot in target list */
 	bool		is_tlist_func_pushdown;
+
+	bool		progress;
 }			jdbcFdwRelationInfo;
 
 
