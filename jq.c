@@ -1480,8 +1480,7 @@ jq_get_exception()
 		exceptionMsg = (jstring) (*Jenv)->CallObjectMethod(Jenv, exc, exceptionMsgID);
 		exceptionString = jdbc_convert_string_to_cstring((jobject) exceptionMsg);
 		err_msg = pstrdup(exceptionString);
-		ereport(DEBUG3, (errmsg("%s", err_msg)));
-		ereport(ERROR, (errmsg("remote server returned an error")));
+		ereport(ERROR, (errmsg("remote server returned an error: %s", err_msg)));
 	}
 	return;
 }
