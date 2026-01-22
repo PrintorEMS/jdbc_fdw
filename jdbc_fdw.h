@@ -163,6 +163,11 @@ extern void jdbc_append_where_clause(StringInfo buf,
 									 bool is_first,
 									 List **params,
 									 char *q_char);
+extern void jdbc_append_group_by_clause(StringInfo buf,
+										 PlannerInfo *root,
+										 RelOptInfo *foreignrel,
+										 List *tlist,
+										 char *q_char);
 extern void jdbc_deparse_insert_sql(StringInfo buf, PlannerInfo *root,
 									Index rtindex, Relation rel,
 									List *targetAttrs, List *returningList,

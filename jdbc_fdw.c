@@ -2192,19 +2192,42 @@ jdbc_foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 	foreach(lc, grouping_target->exprs)
 	{
 		Expr	   *expr = (Expr *) lfirst(lc);
+		Index		sgref = get_pathtarget_sortgroupref(grouping_target, i);
 		ListCell   *l;
+		bool		is_foreign;
+		bool		is_param;
 
 		/*
 		 * Non-grouping expression we need to compute.  Can we ship it as-is
 		 * to the foreign server?
+		 *
+		 * For Aggref nodes, check against grouped_rel because the Aggref walker
+		 * needs to know it's in an UPPER_REL context.
+		 * For other expressions, check against outerrel because Vars inside
+		 * expressions need to be validated against the base table.
 		 */
-		if (jdbc_is_foreign_expr(root, grouped_rel, expr /* , true */ ) &&
-			!jdbc_is_foreign_param(root, grouped_rel, expr))
+		if (IsA(expr, Aggref))
+		{
+			is_foreign = jdbc_is_foreign_expr(root, grouped_rel, expr);
+			is_param = jdbc_is_foreign_param(root, grouped_rel, expr);
+		}
+		else
+		{
+			is_foreign = jdbc_is_foreign_expr(root, fpinfo->outerrel, expr);
+			is_param = jdbc_is_foreign_param(root, fpinfo->outerrel, expr);
+		}
+
+		if (is_foreign && !is_param)
 		{
 			/*
 			 * Yes, so add to tlist as-is; OK to suppress duplicates
 			 */
-			tlist = add_to_flat_tlist(tlist, list_make1(expr));
+			TargetEntry *tle = makeTargetEntry(expr,
+											   list_length(tlist) + 1,
+											   NULL,
+											   false);
+			tle->ressortgroupref = sgref;
+			tlist = lappend(tlist, tle);
 		}
 		else
 		{
@@ -2312,6 +2335,8 @@ jdbc_foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 	 */
 	fpinfo->relation_name = makeStringInfo();
 
+	fpinfo->progress = ofpinfo->progress;
+
 	return true;
 }
 
@@ -2341,10 +2366,10 @@ jdbc_add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	/*
 	 * Nothing to be done, if there is no aggregation required. JDBC does not
-	 * support GROUP BY, GROUPING SET, HAVING, so also return when there are
+	 * support GROUPING SET, HAVING, so also return when there are
 	 * those clauses.
 	 */
-	if (parse->groupClause ||
+	if ((!ifpinfo->progress && parse->groupClause) ||
 		parse->groupingSets ||
 		root->hasHavingQual ||
 		!parse->hasAggs)
