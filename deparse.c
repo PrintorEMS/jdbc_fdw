@@ -144,7 +144,7 @@ static void jdbc_deparse_array_ref(SubscriptingRef *node, deparse_expr_cxt *cont
 #endif
 static void jdbc_deparse_func_expr(FuncExpr *node, deparse_expr_cxt *context);
 static void jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context);
-static void jdbc_deparse_operator_name(StringInfo buf, Form_pg_operator opform);
+static void jdbc_deparse_operator_name(StringInfo buf, Form_pg_operator opform, deparse_expr_cxt *context);
 static void jdbc_deparse_distinct_expr(DistinctExpr *node, deparse_expr_cxt *context);
 static void jdbc_deparse_scalar_array_op_expr(ScalarArrayOpExpr *node,
 											  deparse_expr_cxt *context);
@@ -2008,14 +2008,24 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
 	if (oprkind == 'b')
 #endif
 	{
+		/*
+		 * Append LOWER clause for ILIKE operators if needed
+		 */
+		if (context->progress && (strcmp(NameStr(form->oprname), "~~*") == 0 || strcmp(NameStr(form->oprname), "!~~*") == 0))
+			appendStringInfoString(buf, "LOWER(");
+
 		jdbc_deparse_expr(linitial(node->args), context);
+
+		if (context->progress && (strcmp(NameStr(form->oprname), "~~*") == 0 || strcmp(NameStr(form->oprname), "!~~*") == 0))
+			appendStringInfoString(buf, ")");
+
 		appendStringInfoChar(buf, ' ');
 	}
 
 	/* Deparse operator name. */
-	jdbc_deparse_operator_name(buf, form);
+	jdbc_deparse_operator_name(buf, form, context);
 
-	/* Record current buffer position to append ESCAPE clause if needed */
+	/* Record current buffer position to append extra clause if needed */
 	pos = buf->len;
 
 	/* Deparse right operand. */
@@ -2024,7 +2034,17 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
 	{
 #endif
 		appendStringInfoChar(buf, ' ');
+
+		/*
+		 * Append LOWER clause for ILIKE operators if needed
+		 */
+		if (context->progress && (strcmp(NameStr(form->oprname), "~~*") == 0 || strcmp(NameStr(form->oprname), "!~~*") == 0))
+			appendStringInfoString(buf, "LOWER(");
+
 		jdbc_deparse_expr(llast(node->args), context);
+
+		if (context->progress && (strcmp(NameStr(form->oprname), "~~*") == 0 || strcmp(NameStr(form->oprname), "!~~*") == 0))
+			appendStringInfoString(buf, ")");
 #if PG_VERSION_NUM < 140000
 	}
 #endif
@@ -2045,7 +2065,7 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
  * Print the name of an operator.
  */
 static void
-jdbc_deparse_operator_name(StringInfo buf, Form_pg_operator opform)
+jdbc_deparse_operator_name(StringInfo buf, Form_pg_operator opform, deparse_expr_cxt *context)
 {
 	char	   *cur_opname;
 
@@ -2059,17 +2079,15 @@ jdbc_deparse_operator_name(StringInfo buf, Form_pg_operator opform)
 	}
 	else
 	{
-		if (strcmp(cur_opname, "~~") == 0)
+		if (strcmp(cur_opname, "~~") == 0 || (context->progress && strcmp(cur_opname, "~~*") == 0))
 		{
 			appendStringInfoString(buf, "LIKE");
 		}
-		else if (strcmp(cur_opname, "!~~") == 0)
+		else if (strcmp(cur_opname, "!~~") == 0 || (context->progress && strcmp(cur_opname, "!~~*") == 0))
 		{
 			appendStringInfoString(buf, "NOT LIKE");
 		}
-		else if (strcmp(cur_opname, "~~*") == 0 ||
-				 strcmp(cur_opname, "!~~*") == 0 ||
-				 strcmp(cur_opname, "~") == 0 ||
+		else if (strcmp(cur_opname, "~") == 0 ||
 				 strcmp(cur_opname, "!~") == 0 ||
 				 strcmp(cur_opname, "~*") == 0 ||
 				 strcmp(cur_opname, "!~*") == 0)
