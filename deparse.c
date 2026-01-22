@@ -170,11 +170,15 @@ static const char *JdbcSupportedBuiltinAggFunction[] = {
 	"min",
 	"count",
 	"stddev",
-	"stddev_pop",
 	"stddev_samp",
-	"var_pop",
+	"stdev",
+	"stddevp",
+	"stddev_pop",
+	"stdevp",
+	"var",
 	"var_samp",
-	"variance",
+	"varp",
+	"var_pop",
 	NULL};
 
 /*
