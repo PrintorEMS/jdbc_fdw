@@ -1633,14 +1633,14 @@ jdbc_deparse_string_literal(StringInfo buf, const char *val, deparse_expr_cxt *c
 	 * backslashes.  This will fail on remote servers before 8.1, but those
 	 * are long out of support.
 	 */
-	if (strchr(val, '\\') != NULL)
+	if (!context->progress && strchr(val, '\\') != NULL)
 		appendStringInfoChar(buf, ESCAPE_STRING_SYNTAX);
 	appendStringInfoChar(buf, '\'');
 	for (valptr = val; *valptr; valptr++)
 	{
 		char		ch = *valptr;
 
-		if (SQL_STR_DOUBLE(ch, true))
+		if (!context->progress && SQL_STR_DOUBLE(ch, true))
 			appendStringInfoChar(buf, ch);
 		appendStringInfoChar(buf, ch);
 	}
@@ -1968,6 +1968,7 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
 	HeapTuple	tuple;
 	Form_pg_operator form;
 	char		oprkind;
+	int			pos;
 
 	/* Retrieve information about the operator from system catalog. */
 	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
@@ -2003,6 +2004,9 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
 	/* Deparse operator name. */
 	jdbc_deparse_operator_name(buf, form);
 
+	/* Record current buffer position to append ESCAPE clause if needed */
+	pos = buf->len;
+
 	/* Deparse right operand. */
 #if PG_VERSION_NUM < 140000
 	if (oprkind == 'l' || oprkind == 'b')
@@ -2013,6 +2017,13 @@ jdbc_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
 #if PG_VERSION_NUM < 140000
 	}
 #endif
+
+	/*
+	 * Append ESCAPE '\' clause for LIKE operators if needed
+	 * Currently, we only consider backslash as a special escape character, so specifying ESCAPE clause manually won't work.
+	 */
+	if (context->progress && strchr(buf->data + pos, '\\') != NULL && strstr(buf->data, " LIKE ") != NULL)
+		appendStringInfoString(buf, " ESCAPE \'\\\'");
 
 	appendStringInfoChar(buf, ')');
 
