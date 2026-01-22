@@ -1804,10 +1804,21 @@ jdbc_deparse_const(Const *node, deparse_expr_cxt *context)
 			appendStringInfo(buf, "B'%s'", extval);
 			break;
 		case BOOLOID:
+			/* Since Progress SQL uses the bit type, we need to cast true/false to 1/0 explictly */
 			if (strcmp(extval, "t") == 0)
-				appendStringInfoString(buf, "true");
+			{
+				if (context->progress)
+					appendStringInfoString(buf, "1");
+				else
+					appendStringInfoString(buf, "true");
+			}
 			else
-				appendStringInfoString(buf, "false");
+			{
+				if (context->progress)
+					appendStringInfoString(buf, "0");
+				else
+					appendStringInfoString(buf, "false");
+			}
 			break;
 		default:
 			jdbc_deparse_string_literal(buf, extval, context);
