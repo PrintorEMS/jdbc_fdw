@@ -258,7 +258,7 @@ jdbc_append_limit_clause(deparse_expr_cxt *context)
 	/* Make sure any constants in the exprs are printed portably */
 	nestlevel = jdbc_set_transmission_modes();
 
-	if (root->parse->limitCount)
+	if (!context->progress && root->parse->limitCount)
 	{
 		appendStringInfoString(buf, " LIMIT ");
 		jdbc_deparse_expr((Expr *) root->parse->limitCount, context);
@@ -267,6 +267,20 @@ jdbc_append_limit_clause(deparse_expr_cxt *context)
 	{
 		appendStringInfoString(buf, " OFFSET ");
 		jdbc_deparse_expr((Expr *) root->parse->limitOffset, context);
+		if (context->progress)
+			appendStringInfoString(buf, " ROWS");
+	}
+	else if (context->progress && root->parse->limitCount)
+	{
+		/* We are adding OFFSET 0 when only LIMIT is specified to comply with the syntax of FETCH NEXT */
+		appendStringInfoString(buf, " OFFSET 0 ROWS");
+	}
+
+	if (context->progress && root->parse->limitCount)
+	{
+		appendStringInfoString(buf, " FETCH NEXT ");
+		jdbc_deparse_expr((Expr *) root->parse->limitCount, context);
+		appendStringInfoString(buf, " ROWS ONLY");
 	}
 
 	jdbc_reset_transmission_modes(nestlevel);
