@@ -141,7 +141,8 @@ jdbc_fdw_validator(PG_FUNCTION_ARGS)
 		 */
 		if (strcmp(def->defname, "use_remote_estimate") == 0 ||
 			strcmp(def->defname, "updatable") == 0 ||
-			strcmp(def->defname, "progress") == 0)
+			strcmp(def->defname, "progress") == 0 ||
+			strcmp(def->defname, "key") == 0)
 		{
 			/* these accept only boolean values */
 			(void) defGetBoolean(def);
@@ -170,6 +171,32 @@ jdbc_fdw_validator(PG_FUNCTION_ARGS)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						 errmsg("\"%s\" must be a floating point value greater than or equal to zero",
+								def->defname)));
+		}
+		else if (strcmp(def->defname, "querytimeout") == 0 ||
+				 strcmp(def->defname, "maxheapsize") == 0 ||
+				 strcmp(def->defname, "fetch_size") == 0)
+		{
+			/*
+			 * These must have a integer value greater than zero.
+			 */
+			char	   *value;
+			int			int_val;
+			bool		is_parsed;
+
+			value = defGetString(def);
+			is_parsed = parse_int(value, &int_val, 0, NULL);
+
+			if (!is_parsed)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("invalid value for integer option \"%s\": %s",
+								def->defname, value)));
+
+			if (int_val <= 0)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("\"%s\" must be an integer value greater than zero",
 								def->defname)));
 		}
 	}
