@@ -25,17 +25,19 @@ public class JDBCConnection {
     private long mapping_hashvalue; // keep the uint32 val
 
     private int queryTimeoutValue;
+    private int fetchSizeValue;
     private static JDBCDriverLoader jdbcDriverLoader;
 
     /* JDBC connection hash map */
     private static ConcurrentHashMap<Integer, JDBCConnection> ConnectionHash = new ConcurrentHashMap<Integer, JDBCConnection>();
 
-    public JDBCConnection(Connection conn, boolean invalidate, long server_hashvalue, long mapping_hashvalue, int queryTimeoutValue) {
+    public JDBCConnection(Connection conn, boolean invalidate, long server_hashvalue, long mapping_hashvalue, int queryTimeoutValue, int fetchSizeValue) {
         this.conn = conn;
         this.invalidate = invalidate;
         this.server_hashvalue = server_hashvalue;
         this.mapping_hashvalue = mapping_hashvalue;
         this.queryTimeoutValue = queryTimeoutValue;
+        this.fetchSizeValue = fetchSizeValue;
     }
 
     /* finalize all actived connection */
@@ -87,6 +89,10 @@ public class JDBCConnection {
         return queryTimeoutValue;
     }
 
+    public int getFetchSize() {
+        return fetchSizeValue;
+    }
+
     public Connection getConnection() {
         return this.conn;
     }
@@ -117,6 +123,7 @@ public class JDBCConnection {
         String password = options[3];
         String qTimeoutValue = options[4];
         String fileName = options[5];
+        String fetchSizeValue = options[6];
 
         try {
             File JarFile = new File(fileName);
@@ -140,7 +147,7 @@ public class JDBCConnection {
             if (conn == null)
                 throw new SQLException("Cannot connect server: " + url);
 
-            JDBCConnection Jconn = new JDBCConnection(conn, false, server_hashvalue, mapping_hashvalue, Integer.parseInt(qTimeoutValue));
+            JDBCConnection Jconn = new JDBCConnection(conn, false, server_hashvalue, mapping_hashvalue, Integer.parseInt(qTimeoutValue), Integer.parseInt(fetchSizeValue));
 
             /* cache new connection */
             System.out.println("Create new connection " + key);

@@ -212,6 +212,7 @@ init_jdbcfdw_options(void)
 		{"column_name", AttributeRelationId, false},
 		{"use_remote_estimate", ForeignTableRelationId, false},
 		{"progress", ForeignServerRelationId, false},
+		{"fetch_size", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 

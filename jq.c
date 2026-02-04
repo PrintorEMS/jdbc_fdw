@@ -73,6 +73,7 @@ typedef struct JserverOptions
 	int			querytimeout;
 	char	   *jarfile;
 	int			maxheapsize;
+	int         fetch_size;
 }			JserverOptions;
 
 static JserverOptions opts;
@@ -425,7 +426,7 @@ static JDBCUtilsInfo *
 jdbc_create_JDBC_connection(const ForeignServer *server, const UserMapping *user)
 {
 	jmethodID	idCreate;
-	jstring		stringArray[6];
+	jstring		stringArray[7];
 	jclass		javaString;
 	jobjectArray argArray;
 	jclass		JDBCUtilsClass;
@@ -433,6 +434,7 @@ jdbc_create_JDBC_connection(const ForeignServer *server, const UserMapping *user
 	jstring		identifierQuoteString;
 	char	   *quote_string;
 	char	   *querytimeout_string;
+	char       *fetch_size_string;
 	int			i;
 	int			numParams = sizeof(stringArray) / sizeof(jstring);	/* Number of parameters
 																	 * to Java */
@@ -479,12 +481,15 @@ jdbc_create_JDBC_connection(const ForeignServer *server, const UserMapping *user
 	 */
 	querytimeout_string = (char *) palloc0(intSize);
 	snprintf(querytimeout_string, intSize, "%d", opts.querytimeout);
+	fetch_size_string = (char *) palloc0(intSize);
+	snprintf(fetch_size_string, intSize, "%d", opts.fetch_size);
 	stringArray[0] = (*Jenv)->NewStringUTF(Jenv, opts.drivername);
 	stringArray[1] = (*Jenv)->NewStringUTF(Jenv, opts.url);
 	stringArray[2] = (*Jenv)->NewStringUTF(Jenv, opts.username);
 	stringArray[3] = (*Jenv)->NewStringUTF(Jenv, opts.password);
 	stringArray[4] = (*Jenv)->NewStringUTF(Jenv, querytimeout_string);
 	stringArray[5] = (*Jenv)->NewStringUTF(Jenv, opts.jarfile);
+	stringArray[6] = (*Jenv)->NewStringUTF(Jenv, fetch_size_string);
 	/* Set up the return value */
 	javaString = (*Jenv)->FindClass(Jenv, "java/lang/String");
 	argArray = (*Jenv)->NewObjectArray(Jenv, numParams, javaString, stringArray[0]);
@@ -534,6 +539,7 @@ jdbc_create_JDBC_connection(const ForeignServer *server, const UserMapping *user
 	jdbcUtilsInfo->q_char = pstrdup(quote_string);
 	jdbcUtilsInfo->status = CONNECTION_OK;
 	pfree(querytimeout_string);
+	pfree(fetch_size_string);
 	/* Switch back to old context */
 	MemoryContextSwitchTo(oldcontext);
 	return jdbcUtilsInfo;
@@ -585,6 +591,10 @@ jdbc_get_server_options(JserverOptions * opts, const ForeignServer *f_server, co
 		if (strcmp(def->defname, "url") == 0)
 		{
 			opts->url = defGetString(def);
+		}
+		if (strcmp(def->defname, "fetch_size") == 0)
+		{
+			opts->fetch_size = atoi(defGetString(def));
 		}
 	}
 }

@@ -64,6 +64,9 @@ public class JDBCUtils {
       if (conn.getQueryTimeout() != 0) {
         tmpStmt.setQueryTimeout(conn.getQueryTimeout());
       }
+      if (conn.getFetchSize() != 0) {
+        tmpStmt.setFetchSize(conn.getFetchSize());
+      }
       tmpStmt.executeQuery(query);
     } catch (Throwable e) {
       throw e;
@@ -88,6 +91,9 @@ public class JDBCUtils {
       tmpStmt = conn.getConnection().createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
       if (conn.getQueryTimeout() != 0) {
         tmpStmt.setQueryTimeout(conn.getQueryTimeout());
+      }
+      if (conn.getFetchSize() != 0) {
+        tmpStmt.setFetchSize(conn.getFetchSize());
       }
       tmpResultSet = tmpStmt.executeQuery(query);
       rSetMetadata = tmpResultSet.getMetaData();
@@ -129,6 +135,9 @@ public class JDBCUtils {
       PreparedStatement tmpPstmt = (PreparedStatement) conn.getConnection().prepareStatement(query);
       if (conn.getQueryTimeout() != 0) {
         tmpPstmt.setQueryTimeout(conn.getQueryTimeout());
+      }
+      if (conn.getFetchSize() != 0) {
+        tmpPstmt.setFetchSize(conn.getFetchSize());
       }
       int tmpResultSetKey = initResultSetKey();
       resultSetInfoMap.put(tmpResultSetKey, new resultSetInfo(null, null, 0, tmpPstmt));
