@@ -1949,20 +1949,57 @@ jdbc_deparse_const(Const *node, deparse_expr_cxt *context)
 			appendStringInfo(buf, "B'%s'", extval);
 			break;
 		case BOOLOID:
-			/* Since Progress SQL uses the bit type, we need to cast true/false to 1/0 explictly */
-			if (strcmp(extval, "t") == 0)
 			{
-				if (context->progress)
-					appendStringInfoString(buf, "1");
+				/* Since Progress SQL uses the bit type, we need to cast true/false to 1/0 explictly */
+				if (strcmp(extval, "t") == 0)
+				{
+					if (context->progress)
+						appendStringInfoString(buf, "1");
+					else
+						appendStringInfoString(buf, "true");
+				}
 				else
-					appendStringInfoString(buf, "true");
+				{
+					if (context->progress)
+						appendStringInfoString(buf, "0");
+					else
+						appendStringInfoString(buf, "false");
+				}
 			}
-			else
+			break;
+		case TIMESTAMPTZOID:
+		case TIMETZOID:
 			{
+				/* 
+				 * PostgreSQL's default output for timestamptz/timetz truncates the timezone 
+				 * offset to '+HH' if minutes are zero (e.g., '+01' instead of '+01:00') 
+				 * and uses 'Z' for UTC.
+				 * Progress SQL require the full ISO 8601 format '+HH:MM'.
+				 */
 				if (context->progress)
-					appendStringInfoString(buf, "0");
+				{
+					int len = strlen(extval);
+
+					if (len > 0 && extval[len - 1] == 'Z')
+					{
+						appendStringInfo(buf, "'%.*s+00:00'", len - 1, extval);
+					}
+					else if (len >= 3 && 
+						(extval[len - 3] == '+' || extval[len - 3] == '-') &&
+						isdigit((unsigned char)extval[len - 2]) && 
+						isdigit((unsigned char)extval[len - 1]))
+					{
+						appendStringInfo(buf, "'%s:00'", extval);
+					}
+					else
+					{
+						appendStringInfo(buf, "'%s'", extval);
+					}
+				}
 				else
-					appendStringInfoString(buf, "false");
+				{
+					appendStringInfo(buf, "'%s'", extval);
+				}
 			}
 			break;
 		default:
