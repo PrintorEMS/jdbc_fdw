@@ -1839,6 +1839,10 @@ jq_get_JDBCUtils(JDBCUtilsInfo * jdbcUtilsInfo, jclass * JDBCUtilsClass, jobject
 	{
 		ereport(ERROR, (errmsg("Cannot get the utilsObject from the connection")));
 	}
+	if (Jenv == NULL || *Jenv == NULL)
+	{
+		ereport(ERROR, (errmsg("Cannot get the JVM environment")));
+	}
 	*JDBCUtilsClass = (*Jenv)->FindClass(Jenv, "JDBCUtils");
 	if (*JDBCUtilsClass == NULL)
 	{
