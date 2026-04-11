@@ -34,6 +34,9 @@ public class JDBCUtils {
   private static ConcurrentHashMap<Integer, resultSetInfo> resultSetInfoMap =
       new ConcurrentHashMap<Integer, resultSetInfo>();
 
+  /* Constructor */
+  public JDBCUtils() { }
+
   /*
    * createConnection
    *      Initiates the connection to the foreign database after setting
@@ -45,7 +48,11 @@ public class JDBCUtils {
    *
    */
   public void createConnection(int key, long server_hashvalue, long mapping_hashvalue, String[] options) throws Exception {
-    this.conn = JDBCConnection.getConnection(key, server_hashvalue, mapping_hashvalue, options);
+    try {
+      this.conn = JDBCConnection.getConnection(key, server_hashvalue, mapping_hashvalue, options);
+    } catch (Throwable e) {
+      throw e;
+    }
   }
 
   /*
@@ -577,6 +584,26 @@ public class JDBCUtils {
   }
 
   /*
+   * cleanup
+   *      Closes the JDBC connection and releases resources.
+   *      Called when the JDBCUtils instance is being destroyed.
+   */
+  public void cleanup() throws SQLException {
+    try {
+      closeStatement();
+      if (conn != null) {
+        Connection underlyingConn = conn.getConnection();
+        if (underlyingConn != null) {
+          underlyingConn.close();
+        }
+        conn = null;
+      }
+    } catch (Throwable e) {
+      throw e;
+    }
+  }
+
+  /*
    * checkConnExist
    *      Check the cennection exist or not.
    *      throw error message when the connection dosn't exist.
@@ -875,21 +902,6 @@ public class JDBCUtils {
     } catch (Throwable e) {
       throw e;
     }
-  }
-
-  /* finalize all actived connection */
-  public static void finalizeAllConns(long hashvalue) throws Exception {
-    JDBCConnection.finalizeAllConns(hashvalue);
-  }
-
-  /* finalize connection have given server_hashvalue */
-  public static void finalizeAllServerConns(long hashvalue) throws Exception {
-    JDBCConnection.finalizeAllServerConns(hashvalue);
-  }
-
-  /* finalize connection have given mapping_hashvalue */
-  public static void finalizeAllUserMapingConns(long hashvalue) throws Exception {
-    JDBCConnection.finalizeAllUserMapingConns(hashvalue);
   }
 
   /* finalize cached result set */

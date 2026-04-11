@@ -80,6 +80,8 @@ extern Datum jdbc_convert_to_pg(Oid pgtyp, int pgtypmod, char *value);
 extern List *jq_get_schema_info(JDBCUtilsInfo * jdbcUtilsInfo);
 extern void jdbc_jvm_init(const ForeignServer *server, const UserMapping *user);
 extern void jq_cancel(JDBCUtilsInfo * jdbcUtilsInfo);
+extern void jq_release_jdbc_utils_object(JDBCUtilsInfo * jdbcUtilsInfo);
 void		jq_inval_callback(int cacheid, uint32 hashvalue);
+void		jdbc_reset_connection_cache(void);
 void		jq_release_all_result_sets(void);
 #endif							/* JQ_H */

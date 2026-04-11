@@ -370,9 +370,6 @@ static void prepTuplestoreResult(FunctionCallInfo fcinfo);
 static JDBCUtilsInfo *jdbc_get_conn_by_server_name(char *servername);
 static TupleDesc jdbc_create_descriptor(JDBCUtilsInfo *jdbcUtilsInfo, int *resultSetID);
 static Oid jdbc_convert_type_name(char *typname);
-static ErrorContextCallback *jdbc_register_error_callback(void);
-static void jdbc_remove_error_callback(ErrorContextCallback *errcallback);
-static void jdbc_error_callback(void *arg);
 /*
  * Foreign-data wrapper handler function: return a struct with pointers to my
  * callback routines.
@@ -475,8 +472,6 @@ jdbc_exec(PG_FUNCTION_ARGS)
 
 		if (resultSetID != 0)
 			jq_release_resultset_id(jdbcUtilsInfo, resultSetID);
-
-		jdbc_release_jdbc_utils_obj();
 	}
 	PG_END_TRY();
 
@@ -607,7 +602,6 @@ jdbcGetForeignRelSize(PlannerInfo *root,
 	Oid			userid = OidIsValid(baserel->userid) ? baserel->userid : GetUserId();
 #endif
 	JDBCUtilsInfo	   *jdbcUtilsInfo;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	/* TODO: remove this functionality and support for remote statistics */
 	ereport(DEBUG3, (errmsg("In jdbcGetForeignRelSize")));
@@ -762,9 +756,6 @@ jdbcGetForeignRelSize(PlannerInfo *root,
 								&fpinfo->startup_cost,
 								&fpinfo->total_cost, jdbcUtilsInfo->q_char);
 	}
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 }
 
 /*
@@ -837,7 +828,6 @@ jdbcGetForeignPlan(PlannerInfo *root,
 	List	   *fdw_recheck_quals = NIL;
 	bool		has_limit = false;
 	JDBCUtilsInfo	   *jdbcUtilsInfo;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcGetForeignPlan")));
 
@@ -1070,9 +1060,6 @@ jdbcGetForeignPlan(PlannerInfo *root,
 	 */
 	fdw_private = list_make3(makeString(sql.data), retrieved_attrs, makeInteger(for_update));
 
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
-
 	/*
 	 * Create the ForeignScan node from target list, local filtering
 	 * expressions, remote parameter expressions, and FDW private information.
@@ -1163,7 +1150,6 @@ jdbcBeginForeignScan(ForeignScanState *node, int eflags)
 	int			i;
 	ListCell   *lc;
 	int			rtindex;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcBeginForeignScan")));
 
@@ -1312,9 +1298,6 @@ jdbcBeginForeignScan(ForeignScanState *node, int eflags)
 	else
 		fsstate->param_values = NULL;
 	(void) jq_exec_id(fsstate->jdbcUtilsInfo, fsstate->query, &fsstate->resultSetID);
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 }
 
 /*
@@ -1325,15 +1308,11 @@ static TupleTableSlot *
 jdbcIterateForeignScan(ForeignScanState *node)
 {
 	jdbcFdwScanState *fsstate = (jdbcFdwScanState *) node->fdw_state;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	if (!fsstate->cursor_exists)
 		fsstate->cursor_exists = true;
 	ereport(DEBUG3, (errmsg("In jdbcIterateForeignScan")));
 	jq_iterate(fsstate->jdbcUtilsInfo, node, fsstate->retrieved_attrs, fsstate->resultSetID);
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 
 	return node->ss.ss_ScanTupleSlot;
 }
@@ -1345,7 +1324,6 @@ static void
 jdbcReScanForeignScan(ForeignScanState *node)
 {
 	jdbcFdwScanState *fsstate = (jdbcFdwScanState *) node->fdw_state;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcReScanForeignScan")));
 
@@ -1353,9 +1331,6 @@ jdbcReScanForeignScan(ForeignScanState *node)
 		return;
 
 	(void) jq_exec_id(fsstate->jdbcUtilsInfo, fsstate->query, &fsstate->resultSetID);
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 
 	/* Now force a fresh FETCH. */
 	fsstate->tuples = NULL;
@@ -1380,8 +1355,10 @@ jdbcEndForeignScan(ForeignScanState *node)
 	if (fsstate == NULL)
 		return;
 
-	/* Release remote connection */
-	jdbc_release_jdbc_utils_obj();
+	if (fsstate->jdbcUtilsInfo != NULL)
+    {
+        fsstate->jdbcUtilsInfo->festate = NULL;
+    }
 
 	fsstate->jdbcUtilsInfo = NULL;
 	/* MemoryContexts will be deleted automatically. */
@@ -1504,7 +1481,6 @@ jdbcPlanForeignModify(PlannerInfo *root,
 	UserMapping *user;
 
 	Oid			userid = InvalidOid;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	initStringInfo(&sql);
 
@@ -1648,8 +1624,6 @@ jdbcPlanForeignModify(PlannerInfo *root,
 	table_close(rel, NoLock);
 #endif
 
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 	/*
 	 * Build the fdw_private list that will be available to the executor.
 	 * Items in the list must match enum FdwModifyPrivateIndex, above.
@@ -1686,7 +1660,6 @@ jdbcBeginForeignModify(ModifyTableState *mtstate,
 	Oid			foreignTableId = InvalidOid;
 	int			i;
 	Plan	   *subplan;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcBeginForeignModify")));
 
@@ -1784,9 +1757,6 @@ jdbcBeginForeignModify(ModifyTableState *mtstate,
 #endif
 													 ));
 	}
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 }
 
 /*
@@ -1803,7 +1773,6 @@ jdbcExecForeignInsert(EState *estate,
 	int			bindnum = 0;
 	ListCell   *lc;
 	Datum		value = 0;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcExecForeignInsert")));
 
@@ -1842,8 +1811,6 @@ jdbcExecForeignInsert(EState *estate,
 
 	jq_clear(res);
 
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 	return slot;
 }
 
@@ -1863,7 +1830,6 @@ jdbcExecForeignUpdate(EState *estate,
 	ListCell   *lc = NULL;
 	int			bindnum = 0;
 	int			i = 0;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcExecForeignUpdate")));
 
@@ -1918,8 +1884,6 @@ jdbcExecForeignUpdate(EState *estate,
 
 	MemoryContextReset(fmstate->temp_cxt);
 
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 	/* Return NULL if nothing was updated on the remote end */
 	return slot;
 }
@@ -1937,7 +1901,6 @@ jdbcExecForeignDelete(EState *estate,
 	Relation	rel = resultRelInfo->ri_RelationDesc;
 	Oid			foreignTableId = RelationGetRelid(rel);
 	Jresult    *res;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	ereport(DEBUG3, (errmsg("In jdbcExecForeignDelete")));
 
@@ -1968,9 +1931,6 @@ jdbcExecForeignDelete(EState *estate,
 	jq_clear(res);
 
 	MemoryContextReset(fmstate->temp_cxt);
-
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
 
 	/* Return NULL if nothing was deleted on the remote end */
 	return slot;
@@ -2040,8 +2000,6 @@ jdbcEndForeignModify(EState *estate,
 		fmstate->is_prepared = false;
 	}
 
-	/* Release remote connection */
-	jdbc_release_jdbc_utils_obj();
 	fmstate->jdbcUtilsInfo = NULL;
 }
 
@@ -2897,7 +2855,6 @@ estimate_path_cost_size(PlannerInfo *root,
 		jdbcUtilsInfo = jdbc_get_jdbc_utils_obj(fpinfo->server, fpinfo->user, false);
 		get_remote_estimate(sql.data, jdbcUtilsInfo, &rows, &width,
 							&startup_cost, &total_cost);
-		jdbc_release_jdbc_utils_obj();
 
 		retrieved_rows = rows;
 
@@ -3148,7 +3105,6 @@ jdbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 	ListCell   *column_lc;
 	List	   *schema_list = NIL;
 	bool		first_column;
-	ErrorContextCallback *errcallback = jdbc_register_error_callback();
 
 	elog(DEBUG1, "jdbc_fdw : %s", __func__);
 
@@ -3229,9 +3185,6 @@ jdbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 		}
 	}
 
-	/* Uninstall error context callback. */
-	jdbc_remove_error_callback(errcallback);
-
 	return commands;
 }
 
@@ -3256,42 +3209,4 @@ jdbc_execute_commands(List *cmd_list)
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(WARNING, "SPI_finish failed");
-}
-
-/*
- * jdbc_register_error_callback
- *		register error callback to release resource
- */
-static ErrorContextCallback *
-jdbc_register_error_callback(void)
-{
-	ErrorContextCallback *errcallback = (ErrorContextCallback *) palloc0(sizeof(ErrorContextCallback));
-
-	errcallback->callback = jdbc_error_callback;
-	errcallback->arg = NULL;
-	errcallback->previous = error_context_stack;
-	error_context_stack = errcallback;
-
-	return errcallback;
-}
-
-
-/*
- * jdbc_remove_error_callback
- *		remove registered error callback
- */
-static void
-jdbc_remove_error_callback(ErrorContextCallback *errcallback)
-{
-	error_context_stack = errcallback->previous;
-}
-
-/*
- * JDBC Callback function which is called when error occured:
- *	Release resource of JDBCUtils object.
- */
-static void
-jdbc_error_callback(void *arg)
-{
-	jdbc_release_jdbc_utils_obj();
 }

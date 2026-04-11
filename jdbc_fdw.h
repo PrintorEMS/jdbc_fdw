@@ -34,7 +34,7 @@
 #include "libpq-fe.h"
 #include "jq.h"
 
-#define CODE_VERSION	500
+#define CODE_VERSION	800
 typedef struct jdbcAggref
 {
 	StringInfo	aggname;
@@ -124,7 +124,6 @@ extern void jdbc_reset_transmission_modes(int nestlevel);
 /* in connection.c */
 extern JDBCUtilsInfo * jdbc_get_jdbc_utils_obj(ForeignServer *server, UserMapping *user,
 								   bool will_prep_stmt);
-extern void jdbc_release_jdbc_utils_obj(void);
 extern void jdbc_fdw_report_error(int elevel, Jresult * res, JDBCUtilsInfo * jdbcUtilsInfo,
 								  bool clear, const char *sql);
 

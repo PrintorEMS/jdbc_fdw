@@ -16,7 +16,6 @@ import java.io.File;
 import java.net.URL;
 import java.sql.*;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class JDBCConnection {
     private Connection conn = null;
@@ -28,9 +27,6 @@ public class JDBCConnection {
     private int fetchSizeValue;
     private static JDBCDriverLoader jdbcDriverLoader;
 
-    /* JDBC connection hash map */
-    private static ConcurrentHashMap<Integer, JDBCConnection> ConnectionHash = new ConcurrentHashMap<Integer, JDBCConnection>();
-
     public JDBCConnection(Connection conn, boolean invalidate, long server_hashvalue, long mapping_hashvalue, int queryTimeoutValue, int fetchSizeValue) {
         this.conn = conn;
         this.invalidate = invalidate;
@@ -40,47 +36,11 @@ public class JDBCConnection {
         this.fetchSizeValue = fetchSizeValue;
     }
 
-    /* finalize all actived connection */
-    public static void finalizeAllConns(long hashvalue) throws Exception {
-        for (JDBCConnection Jconn : ConnectionHash.values()) {
-            Jconn.invalidate = true;
-
-            if (Jconn.conn != null) {
-                Jconn.conn.close();
-                Jconn.conn = null;
-            }
-        }
-    }
-
-    /* finalize connection have given server_hashvalue */
-    public static void finalizeAllServerConns(long hashvalue) throws Exception {
-        for (JDBCConnection Jconn : ConnectionHash.values()) {
-            if (Jconn.server_hashvalue == hashvalue) {
-                Jconn.invalidate = true;
-                System.out.println("Finalizing " +  Jconn);
-
-                if (Jconn.conn != null) {
-                    Jconn.conn.close();
-                    Jconn.conn = null;
-                }
-                break;
-            }
-        }
-    }
-
-    /* finalize connection have given mapping_hashvalue */
-    public static void finalizeAllUserMapingConns(long hashvalue) throws Exception {
-        for (JDBCConnection Jconn : ConnectionHash.values()) {
-            if (Jconn.mapping_hashvalue == hashvalue) {
-                Jconn.invalidate = true;
-                System.out.println("Finalizing " +  Jconn);
-
-                if (Jconn.conn != null) {
-                    Jconn.conn.close();
-                    Jconn.conn = null;
-                }
-                break;
-            }
+    public void close() throws SQLException {
+        this.invalidate = true;
+        if (this.conn != null) {
+            this.conn.close();
+            this.conn = null;
         }
     }
 
@@ -99,16 +59,6 @@ public class JDBCConnection {
 
     /* get jdbc connection, create new one if not cached before */
     public static JDBCConnection getConnection(int key, long server_hashvalue, long mapping_hashvalue, String[] options) throws Exception {
-        if (ConnectionHash.containsKey(key)) {
-            JDBCConnection Jconn = ConnectionHash.get(key);
-
-            if (Jconn.invalidate == false) {
-                System.out.println("got connection " + Jconn.getConnection());
-                return Jconn;
-            }
-
-        }
-
         return createConnection(key, server_hashvalue, mapping_hashvalue, options);
     }
 
@@ -148,10 +98,6 @@ public class JDBCConnection {
                 throw new SQLException("Cannot connect server: " + url);
 
             JDBCConnection Jconn = new JDBCConnection(conn, false, server_hashvalue, mapping_hashvalue, Integer.parseInt(qTimeoutValue), Integer.parseInt(fetchSizeValue));
-
-            /* cache new connection */
-            System.out.println("Create new connection " + key);
-            ConnectionHash.put(key, Jconn);
 
             return Jconn;
         } catch (Throwable e) {
