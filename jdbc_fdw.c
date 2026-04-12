@@ -470,7 +470,7 @@ jdbc_exec(PG_FUNCTION_ARGS)
 		if (res)
 			jq_clear(res);
 
-		if (resultSetID != 0)
+		if (resultSetID != 0 && !IsAbortedTransactionBlockState())
 			jq_release_resultset_id(jdbcUtilsInfo, resultSetID);
 	}
 	PG_END_TRY();

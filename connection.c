@@ -50,6 +50,7 @@ typedef struct JdbcUtilCacheEntry
 	JDBCUtilsInfo *jdbcUtilsInfo;	/* connection to foreign server, or NULL */
 	uint32		server_hashvalue;	/* hash value of foreign server OID */
 	uint32		mapping_hashvalue;	/* hash value of user mapping OID */
+	bool		invalidated;		/* true if entry is invalidated */
 } JdbcUtilCacheEntry;
 
 /*
@@ -152,10 +153,29 @@ jdbc_get_jdbc_utils_obj(ForeignServer *server, UserMapping *user,
 	 * Find or create cached entry for requested connection.
 	 */
 	entry = hash_search(JdbcUtilsHash, &key, HASH_ENTER, &found);
+
+	/* If the entry was found but invalidated, clear it */
+	if (found && entry->invalidated)
+	{
+		if (entry->jdbcUtilsInfo != NULL)
+		{
+			/* Delete the global JNI reference before clearing the object */
+			jq_release_jdbc_utils_object(entry->jdbcUtilsInfo);
+
+			/* Free palloc'd memory in CacheMemoryContext */
+			pfree(entry->jdbcUtilsInfo);
+			entry->jdbcUtilsInfo = NULL;
+		}
+
+		entry->invalidated = false;
+		found = false;
+	}
+
 	if (!found)
 	{
 		/* initialize new hashtable entry (key is already filled in) */
 		entry->jdbcUtilsInfo = NULL;
+		entry->invalidated = false;
 	}
 
 	/* Get current connection from cache (may be NULL) */
@@ -244,14 +264,22 @@ jdbc_fdw_inval_callback(Datum arg, int cacheid, uint32 hashvalue)
 			(cacheid == USERMAPPINGOID &&
 			 entry->mapping_hashvalue == hashvalue))
 		{
-			/* Delete the global JNI reference before clearing the object */
-			jq_release_jdbc_utils_object(entry->jdbcUtilsInfo);
+			/* If we are in a transaction, mark the entry as invalidated so xact_callback will handle the cleanup */
+			if (xact_got_connection)
+			{
+				entry->invalidated = true;
+			}
+			else
+			{
+				/* Delete the global JNI reference before clearing the object */
+				jq_release_jdbc_utils_object(entry->jdbcUtilsInfo);
 
-			/* Free palloc'd memory in CacheMemoryContext */
-			pfree(entry->jdbcUtilsInfo);
-			entry->jdbcUtilsInfo = NULL;
+				/* Free palloc'd memory in CacheMemoryContext */
+				pfree(entry->jdbcUtilsInfo);
+				entry->jdbcUtilsInfo = NULL;
 
-			hash_search(JdbcUtilsHash, (void *) &entry->key, HASH_REMOVE, NULL);
+				hash_search(JdbcUtilsHash, (void *) &entry->key, HASH_REMOVE, NULL);
+			}
 		}
 	}
 
@@ -517,6 +545,28 @@ jdbcfdw_xact_callback(XactEvent event, void *arg)
 	}
 	else if (event == XACT_EVENT_COMMIT)
 	{
+		/* check if entry is still valid, if not, clean it up */
+		hash_seq_init(&scan, JdbcUtilsHash);
+		while ((entry = (JdbcUtilCacheEntry *) hash_seq_search(&scan)))
+		{
+			if (entry->invalidated)
+			{
+				if (entry->jdbcUtilsInfo != NULL)
+				{
+					/* Delete the global JNI reference before clearing the object */
+					jq_release_jdbc_utils_object(entry->jdbcUtilsInfo);
+
+					/* Free palloc'd memory in CacheMemoryContext */
+					pfree(entry->jdbcUtilsInfo);
+					entry->jdbcUtilsInfo = NULL;
+				}
+
+				entry->invalidated = false;
+				if (hash_search(JdbcUtilsHash, (void *) &entry->key, HASH_REMOVE, NULL) == NULL)
+                	elog(WARNING, "jdbc_fdw: hash table corruption detected");
+			}
+		}
+
 		/*
 		 * Transaction committed successfully - keep connections alive
 		 * for reuse in future transactions. Only release transaction-specific
