@@ -184,6 +184,118 @@ static const char *JdbcSupportedBuiltinAggFunction[] = {
 	NULL};
 
 /*
+ * JdbcSupportedBuiltinWhereFunction
+ * List of supported builtin functions for WHERE clause in Jdbc
+ * Those functions are just copyed from OpenEdge SQL documentation so some of them are not supported in PostgreSQL.
+ */
+static const char *JdbcSupportedBuiltinWhereFunction[] = {
+	"abs",
+	"acos",
+	"add_months",
+	"ascii",
+	"asin",
+	"atan",
+	"atan2",
+	"avg",
+	"case",
+	"cast",
+	"cdc_get_changed_columns",
+	"cdc_is_column_changed",
+	"ceiling",
+	"char",
+	"chr",
+	"coalesce",
+	"concat",
+	"convert",
+	"convert",
+	"cos",
+	"count",
+	"curdate",
+	"curtime",
+	"currval",
+	"database",
+	"dayname",
+	"dayofmonth",
+	"dayofweek",
+	"dayofyear",
+	"db_name",
+	"decode",
+	"degrees",
+	"exp",
+	"floor",
+	"greatest",
+	"hour",
+	"ifnull",
+	"initcap",
+	"insert",
+	"instr",
+	"isoweekday",
+	"isoweek",
+	"isoyear",
+	"last_day",
+	"lcase",
+	"least",
+	"left",
+	"length",
+	"locate",
+	"log10",
+	"lower",
+	"lpad",
+	"ltrim",
+	"max",
+	"min",
+	"minute",
+	"mod",
+	"month",
+	"monthname",
+	"months_between",
+	"next_day",
+	"nextval",
+	"now",
+	"nullif",
+	"nvl",
+	"pi",
+	"power",
+	"prefix",
+	"pro_arr_descape",
+	"pro_arr_escape",
+	"pro_element",
+	"quarter",
+	"radians",
+	"rand",
+	"repeat",
+	"replace",
+	"right",
+	"round",
+	"rowid",
+	"rpad",
+	"rtrim",
+	"second",
+	"sign",
+	"sin",
+	"sqrt",
+	"substr",
+	"substring",
+	"suffix",
+	"sum",
+	"sysdate",
+	"systime",
+	"systimestamp",
+	"tan",
+	"to_char",
+	"to_date",
+	"to_number",
+	"to_time",
+	"to_timestamp",
+	"translate",
+	"ucase",
+	"upper",
+	"user",
+	"week",
+	"year",
+	NULL};
+
+/*
  * Dispatch table for SQL syntax functions (COERCE_SQL_SYNTAX).
  * These functions use SQL-mandated special syntax like EXTRACT(field FROM source)
  * instead of regular comma-separated function arguments.
@@ -547,6 +659,11 @@ jdbc_foreign_expr_walker(Node *node,
 		case T_FuncExpr:
 			{
 				FuncExpr   *fe = (FuncExpr *) node;
+				char       *opername = get_func_name(fe->funcid);
+
+				/* Only function exist in JdbcSupportedBuiltinWhereFunction can be passed to JDBC */
+				if (!jdbc_func_exist_in_list(opername, JdbcSupportedBuiltinWhereFunction))
+					return false;
 
 				/* Does not support push down explicit cast function */
 				if (fe->funcformat == COERCE_EXPLICIT_CAST)
