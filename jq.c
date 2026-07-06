@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include "postgres.h"
 #include "jdbc_fdw.h"
+#include "access/htup_details.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_user_mapping.h"
@@ -22,6 +23,7 @@
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/tuplestore.h"
 #include "foreign/fdwapi.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -348,18 +350,18 @@ jdbc_convert_string_to_cstring(jobject java_cstring)
 static Datum
 jdbc_convert_byte_array_to_datum(jbyteArray byteVal)
 {
-	Datum		valueDatum;
+	bytea	   *result;
 	jbyte	   *buf = (*Jenv)->GetByteArrayElements(Jenv, byteVal, NULL);
 	jsize		size = (*Jenv)->GetArrayLength(Jenv, byteVal);
 
 	if (buf == NULL)
-		return 0;
+		return (Datum) 0;
 
-	valueDatum = (Datum) palloc0(size + VARHDRSZ);
-	memcpy(VARDATA(valueDatum), buf, size);
-	SET_VARSIZE(valueDatum, size + VARHDRSZ);
+	result = (bytea *) palloc0(size + VARHDRSZ);
+	memcpy(VARDATA(result), buf, size);
+	SET_VARSIZE(result, size + VARHDRSZ);
 	(*Jenv)->ReleaseByteArrayElements(Jenv, byteVal, buf, JNI_ABORT);
-	return valueDatum;
+	return PointerGetDatum(result);
 }
 
 /*
