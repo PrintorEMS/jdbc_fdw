@@ -13,9 +13,31 @@ REGRESS = postgresql/new_test postgresql/aggregates postgresql/date postgresql/f
 
 JDBC_CONFIG = jdbc_config
 
-LIBDIR=/usr/lib64/
+# Locate the JVM shared library (libjvm.so) to link against.
+#
+# libjvm.so does not live in a standard linker search path (e.g. /usr/lib64);
+# its location depends on which JDK is installed (vendor, version, arch), e.g.
+#   /usr/lib/jvm/java-21-openjdk-amd64/lib/server/libjvm.so
+#
+# Respect JAVA_HOME if the caller has set it; otherwise try to discover it
+# from the `java` binary on PATH.
+ifndef JAVA_HOME
+JAVA_HOME := $(shell java -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java\.home = //p')
+endif
 
-SHLIB_LINK += -L$(LIBDIR) -ljvm
+ifeq ($(strip $(JAVA_HOME)),)
+$(error JAVA_HOME is not set and could not be auto-detected from `java` on PATH. Please `export JAVA_HOME=/path/to/your/jdk` and retry)
+endif
+
+LIBJVM_DIR := $(shell find $(JAVA_HOME) -name 'libjvm.so' 2>/dev/null | xargs -r -n1 dirname | head -1)
+
+ifeq ($(strip $(LIBJVM_DIR)),)
+$(error Could not find libjvm.so under JAVA_HOME ($(JAVA_HOME)). Please check your JDK installation)
+endif
+
+# -L to find it at link time, -rpath so the backend can dlopen() it at
+# runtime too (libjvm.so is normally not in the system ldconfig cache).
+SHLIB_LINK += -L$(LIBJVM_DIR) -Wl,-rpath,$(LIBJVM_DIR) -ljvm
 
 UNAME = $(shell uname)
 

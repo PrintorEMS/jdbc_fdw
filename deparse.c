@@ -1486,7 +1486,6 @@ jdbc_deparse_insert_sql(StringInfo buf, PlannerInfo *root,
 						List *targetAttrs, List *returningList,
 						List **retrieved_attrs, char *q_char)
 {
-	AttrNumber	pindex;
 	bool		first;
 	ListCell   *lc;
 
@@ -1511,7 +1510,6 @@ jdbc_deparse_insert_sql(StringInfo buf, PlannerInfo *root,
 
 		appendStringInfoString(buf, ") VALUES (");
 
-		pindex = 1;
 		first = true;
 		foreach(lc, targetAttrs)
 		{
@@ -1520,7 +1518,6 @@ jdbc_deparse_insert_sql(StringInfo buf, PlannerInfo *root,
 			first = false;
 
 			appendStringInfo(buf, "?");
-			pindex++;
 		}
 
 		appendStringInfoChar(buf, ')');

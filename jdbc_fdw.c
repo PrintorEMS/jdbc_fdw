@@ -1829,7 +1829,6 @@ jdbcExecForeignUpdate(EState *estate,
 	Oid			foreignTableId = RelationGetRelid(rel);
 	ListCell   *lc = NULL;
 	int			bindnum = 0;
-	int			i = 0;
 
 	ereport(DEBUG3, (errmsg("In jdbcExecForeignUpdate")));
 
@@ -1853,7 +1852,6 @@ jdbcExecForeignUpdate(EState *estate,
 		value = slot_getattr(slot, attnum, &is_null);
 		jq_bind_sql_var(fmstate->jdbcUtilsInfo, type, bindnum, value, &is_null, fmstate->resultSetID);
 		bindnum++;
-		i++;
 	}
 
 	/*

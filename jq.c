@@ -102,7 +102,7 @@ static Datum jdbc_convert_object_to_datum(Oid, int32, jobject);
 /*
  * JVM destroy function
  */
-static void jdbc_destroy_jvm();
+static void jdbc_destroy_jvm(int code, Datum arg);
 
 /*
  * clears any exception that is currently being thrown
@@ -393,7 +393,7 @@ jdbc_convert_object_to_datum(Oid pgtype, int32 pgtypmod, jobject obj)
  * jdbc_destroy_jvm Shuts down the JVM.
  */
 static void
-jdbc_destroy_jvm()
+jdbc_destroy_jvm(int code, Datum arg)
 {
 	jint res;
 
