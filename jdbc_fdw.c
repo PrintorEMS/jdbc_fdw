@@ -1829,7 +1829,6 @@ jdbcExecForeignUpdate(EState *estate,
 	Oid			foreignTableId = RelationGetRelid(rel);
 	ListCell   *lc = NULL;
 	int			bindnum = 0;
-	int			i = 0;
 
 	ereport(DEBUG3, (errmsg("In jdbcExecForeignUpdate")));
 
@@ -1853,7 +1852,6 @@ jdbcExecForeignUpdate(EState *estate,
 		value = slot_getattr(slot, attnum, &is_null);
 		jq_bind_sql_var(fmstate->jdbcUtilsInfo, type, bindnum, value, &is_null, fmstate->resultSetID);
 		bindnum++;
-		i++;
 	}
 
 	/*
@@ -3088,6 +3086,44 @@ jdbcAnalyzeForeignTable(Relation relation,
 
 
 /*
+ * jdbc_validate_remote_type_name
+ *		Sanity-check a column type name obtained from the remote server's
+ *		JDBC metadata before splicing it, unquoted, into a locally-executed
+ *		CREATE FOREIGN TABLE command.
+ *
+ *		Unlike identifiers (table/column names), a type name may legitimately
+ *		contain parentheses, commas and digits (e.g. "CHAR (1)") or trailing
+ *		array brackets (e.g. "BOOL[]"), so it cannot simply be passed through
+ *		quote_identifier().  Instead we restrict it to a conservative
+ *		allow-list of characters that covers every type name jdbc_fdw
+ *		actually produces (see JDBCUtils.getColumnTypes()) and refuse
+ *		anything else, so a malicious or compromised remote server cannot
+ *		use this field to inject arbitrary SQL into locally-executed DDL.
+ */
+static void
+jdbc_validate_remote_type_name(const char *typname, const char *tablename)
+{
+	const char *p;
+
+	for (p = typname; *p; p++)
+	{
+		char		ch = *p;
+
+		if (isalnum((unsigned char) ch) ||
+			ch == ' ' || ch == '_' || ch == '(' || ch == ')' ||
+			ch == ',' || ch == '[' || ch == ']' || ch == '.')
+			continue;
+
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+				 errmsg("jdbc_fdw: remote column type name for table \"%s\" contains unsupported character",
+						tablename),
+				 errdetail("Offending type name reported by remote server: \"%s\".",
+						   typname)));
+	}
+}
+
+/*
  * Import a foreign schema
  */
 static List *
@@ -3133,18 +3169,34 @@ jdbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 		foreach(table_lc, schema_list)
 		{
 			JtableInfo *tmpTableInfo = (JtableInfo *) lfirst(table_lc);
+			const char *quoted_table_name;
+
+			/*
+			 * table_name/column_name/column_type below all originate from
+			 * the *remote* server's JDBC metadata (DatabaseMetaData) and
+			 * must therefore be treated as untrusted input: a malicious or
+			 * compromised remote server could otherwise use a crafted
+			 * table/column/type name to inject arbitrary SQL into the
+			 * CREATE/DROP FOREIGN TABLE commands generated here, some of
+			 * which are executed locally via SPI (see
+			 * jdbc_execute_commands()).  Quote identifiers the same way
+			 * jdbc_deparse_relation()/jdbc_quote_identifier() already do
+			 * for query pushdown, and validate the type name against an
+			 * allow-list.
+			 */
+			quoted_table_name = quote_identifier(tmpTableInfo->table_name);
 
 			resetStringInfo(&buf);
 			if (recreate)
 			{
-				appendStringInfo(&buf, "DROP FOREIGN TABLE IF EXISTS %s", tmpTableInfo->table_name);
+				appendStringInfo(&buf, "DROP FOREIGN TABLE IF EXISTS %s", quoted_table_name);
 				commands_drop = lappend(commands_drop, pstrdup(buf.data));
 				resetStringInfo(&buf);
-				appendStringInfo(&buf, "CREATE FOREIGN TABLE %s(", tmpTableInfo->table_name);
+				appendStringInfo(&buf, "CREATE FOREIGN TABLE %s(", quoted_table_name);
 			}
 			else
 			{
-				appendStringInfo(&buf, "CREATE FOREIGN TABLE IF NOT EXISTS %s(", tmpTableInfo->table_name);
+				appendStringInfo(&buf, "CREATE FOREIGN TABLE IF NOT EXISTS %s(", quoted_table_name);
 			}
 			first_column = true;
 			foreach(column_lc, tmpTableInfo->column_info)
@@ -3165,9 +3217,14 @@ jdbcImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 					elog(WARNING, "table: %s has unrecognizable column type for JDBC; skipping", tmpTableInfo->table_name);
 					goto NEXT_COLUMN;
 				}
+
+				/* Reject anything that isn't a plausible type name. */
+				jdbc_validate_remote_type_name(columnInfo->column_type,
+												tmpTableInfo->table_name);
+
 				/* Print column name and type */
 				appendStringInfo(&buf, "%s %s",
-								 columnInfo->column_name,
+								 quote_identifier(columnInfo->column_name),
 								 columnInfo->column_type);
 				/* Add option if the column is rowkey. */
 				if (columnInfo->primary_key)
